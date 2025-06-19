@@ -103,11 +103,36 @@ class RJS_DBEvents {
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
       `;
 
+      const createEditorActionsTable = `
+        CREATE TABLE IF NOT EXISTS rjs_editoractions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          server_id VARCHAR(255) NULL,
+          timestamp VARCHAR(50) NOT NULL,
+          playerId INT NOT NULL,
+          playerName VARCHAR(255) NULL,
+          playerGUID VARCHAR(255) NULL,
+          actionType VARCHAR(255) NULL,
+          actionCategory VARCHAR(100) NULL,
+          hoveredEntityName VARCHAR(255) NULL,
+          hoveredEntityOwnerId INT NULL,
+          selectedEntitiesCount INT DEFAULT 0,
+          selectedEntitiesNames TEXT NULL,
+          selectedEntitiesOwners TEXT NULL,
+          created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_timestamp (timestamp),
+          INDEX idx_player_guid (playerGUID),
+          INDEX idx_action_type (actionType),
+          INDEX idx_action_category (actionCategory),
+          INDEX idx_player_id (playerId)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      `;
+
       await connection.query(createChatTable);
       await connection.query(createKillsTable);
+      await connection.query(createEditorActionsTable);
 
       connection.release();
-      logger.info(`[${this.name}] Database schema setup complete - created rjs_chat and rjs_playerkills tables.`);
+      logger.info(`[${this.name}] Database schema setup complete - created rjs_chat, rjs_playerkills, and rjs_editoractions tables.`);
     } catch (error) {
       logger.error(`[${this.name}] Error setting up database schema: ${error.message}`);
       throw error;
@@ -117,6 +142,7 @@ class RJS_DBEvents {
   setupEventListeners() {
     this.serverInstance.on('rjsChatMessageEvent', this.handleChatMessage.bind(this));
     this.serverInstance.on('rjsPlayerKilledEvent', this.handlePlayerKilled.bind(this));
+    this.serverInstance.on('rjsEditorActionEvent', this.handleEditorAction.bind(this));
   }
 
   async handleChatMessage(data) {
@@ -190,10 +216,60 @@ class RJS_DBEvents {
     }
   }
 
+  async handleEditorAction(data) {
+    if (!data || !data.timestamp) {
+      logger.warn(`[${this.name}] Received incomplete rjsEditorActionEvent data`);
+      return;
+    }
+
+    try {
+      const selectedEntitiesCount = data.selectedEntities ? data.selectedEntities.length : 0;
+      let selectedEntitiesNames = null;
+      let selectedEntitiesOwners = null;
+
+      if (data.selectedEntities && data.selectedEntities.length > 0) {
+        selectedEntitiesNames = data.selectedEntities
+          .map(entity => entity.name || 'unknown')
+          .join(',');
+        selectedEntitiesOwners = data.selectedEntities
+          .map(entity => entity.ownerId !== null ? entity.ownerId.toString() : '-1')
+          .join(',');
+      }
+
+      const insertQuery = `
+        INSERT INTO rjs_editoractions (
+          server_id, timestamp, playerId, playerName, playerGUID, actionType, actionCategory,
+          hoveredEntityName, hoveredEntityOwnerId, selectedEntitiesCount, 
+          selectedEntitiesNames, selectedEntitiesOwners
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await process.mysqlPool.query(insertQuery, [
+        this.serverId,
+        data.timestamp,
+        data.player?.id || -1,
+        data.player?.name || null,
+        data.player?.guid || null,
+        data.action?.type || null,
+        data.action?.category || null,
+        data.hoveredEntity?.name || null,
+        data.hoveredEntity?.ownerId || null,
+        selectedEntitiesCount,
+        selectedEntitiesNames,
+        selectedEntitiesOwners
+      ]);
+
+      logger.verbose(`[${this.name}] Stored RJS editor action: ${data.player?.name} performed ${data.action?.category} (${data.action?.type}) on ${selectedEntitiesCount} entities (Server: ${this.serverId})`);
+    } catch (error) {
+      logger.error(`[${this.name}] Error storing RJS editor action: ${error.message}`);
+    }
+  }
+
   async cleanup() {
     if (this.serverInstance) {
       this.serverInstance.removeAllListeners('rjsChatMessageEvent');
       this.serverInstance.removeAllListeners('rjsPlayerKilledEvent');
+      this.serverInstance.removeAllListeners('rjsEditorActionEvent');
       this.serverInstance = null;
     }
     this.isInitialized = false;
