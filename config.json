@@ -25,6 +25,10 @@
     }
   },
   "customParsers": {
+    "rjs-logging": {
+      "enabled": false,
+      "logDir": "/path/to/RJSLogging/events"
+    }
   },
   "consoleLogLevel": "info",
   "outputLogLevel": "info",
@@ -93,6 +97,16 @@
       "command": "reload",
       "enabled": false,
       "commandLevel": 1
+    },
+    {
+      "command": "killhistorywcs",
+      "enabled": false,
+      "commandLevel": 3
+    },
+    {
+      "command": "messagehistorywcs",
+      "enabled": false,
+      "commandLevel": 3
     }
   ],
   "plugins": [
@@ -110,6 +124,28 @@
       "plugin": "DBLog",
       "enabled": false,
       "interval": 5
+    },
+    {
+      "plugin": "RJS_LogChat",
+      "requiredMods": "RJS Logging",
+      "enabled": false,
+      "channel": "your-discord-channel-id-here"
+    },
+    {
+      "plugin": "RJS_LogTK",
+      "requiredMods": "RJS Logging",
+      "enabled": false,
+      "channel": "your-discord-channel-id-here"
+    },
+    {
+      "plugin": "RJS_DBEvents",
+      "requiredMods": "RJS Logging",
+      "enabled": false
+    },
+    {
+      "plugin": "RJS_DBLog",
+      "requiredMods": "RJS Logging",
+      "enabled": false
     },
     {
       "plugin": "VoteLogs",
