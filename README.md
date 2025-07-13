@@ -18,7 +18,7 @@ ReforgerJS relies on being able to access the Reforger server log directory in o
 #### Prerequisites
 
 - [Node.js](https://nodejs.org/en/) (18.x) - [Download](https://nodejs.org/en/)
-- For player stats, Add this to your server startup file: `-logstats 30000` [More Info](https://community.bistudio.com/wiki/Arma_Reforger:Startup_Parameters#logStats)
+- For server stats, Add this to your server startup file: `-logstats 30000` [More Info](https://community.bistudio.com/wiki/Arma_Reforger:Startup_Parameters#logStats)
 - Some plugins may have additional requirements.
 
 #### Installation
