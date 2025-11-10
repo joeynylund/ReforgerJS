@@ -161,16 +161,18 @@ class RJSLoggingParser extends EventEmitter {
       const PlayerKilledEventHandler = require('./regexHandlers/PlayerKilledEvent');
       const EditorActionEventHandler = require('./regexHandlers/EditorActionEvent');
       const AIKilledEventHandler = require('./regexHandlers/AIKilledEvent');
+      const DamageEventHandler = require('./regexHandlers/DamageEvent');
       const BaseCaptureEventHandler = require('./regexHandlers/BaseCaptureEvent');
       const GmStatusEventHandler = require('./regexHandlers/GmStatusEvent');
       const GameStatusEventHandler = require('./regexHandlers/GameStatusEvent');
       const SquadListEventHandler = require('./regexHandlers/SquadListEvent');
-      
+
       this.chatMessageEventHandler = new ChatMessageEventHandler();
       this.playerJoinedEventHandler = new PlayerJoinedEventHandler();
       this.playerKilledEventHandler = new PlayerKilledEventHandler();
       this.editorActionEventHandler = new EditorActionEventHandler();
       this.aiKilledEventHandler = new AIKilledEventHandler();
+      this.damageEventHandler = new DamageEventHandler();
       this.baseCaptureEventHandler = new BaseCaptureEventHandler();
       this.gmStatusEventHandler = new GmStatusEventHandler();
       this.gameStatusEventHandler = new GameStatusEventHandler();
@@ -233,7 +235,14 @@ class RJSLoggingParser extends EventEmitter {
         logger.verbose(`RJS SquadListEvent: Updated player list - ${data.players.length} players in ${data.summary.totalGroups} groups`);
         this.emit('rjsSquadListEvent', data);
       });
-      
+
+      this.damageEventHandler.on('damageEvent', data => {
+        const friendlyFireText = data.isFriendlyFire ? ' (FRIENDLY FIRE)' : '';
+        const damageDescription = `${data.killerName} damaged ${data.victimName} for ${data.damageAmount} with ${data.weaponName}${friendlyFireText}`;
+        logger.verbose(`RJS DamageEvent: ${damageDescription} - Distance: ${data.distance}m, Hit Zone: ${data.hitZoneName}`);
+        this.emit('rjsDamageEvent', data);
+      });
+
       logger.verbose('RJS-Logging regex handlers initialized');
     } catch (error) {
       logger.error(`Error setting up RJS-Logging regex handlers: ${error.message}`);
@@ -260,13 +269,17 @@ class RJSLoggingParser extends EventEmitter {
 
   processPlayerKilledLine(line) {
     this.linesPerMinute.playerKilled++;
-    
+
     if (this.playerKilledEventHandler && this.playerKilledEventHandler.test(line)) {
       this.playerKilledEventHandler.processLine(line);
       this.matchingLinesPerMinute.playerKilled++;
     }
     else if (this.aiKilledEventHandler && this.aiKilledEventHandler.test(line)) {
       this.aiKilledEventHandler.processLine(line);
+      this.matchingLinesPerMinute.playerKilled++;
+    }
+    else if (this.damageEventHandler && this.damageEventHandler.test(line)) {
+      this.damageEventHandler.processLine(line);
       this.matchingLinesPerMinute.playerKilled++;
     }
   }
@@ -491,6 +504,6 @@ class RJSLoggingParser extends EventEmitter {
   }
 }
 
-RJSLoggingParser.eventNames = ['rjsChatMessageEvent', 'rjsPlayerJoinedEvent', 'rjsPlayerKilledEvent', 'rjsEditorActionEvent', 'rjsAIKilledEvent', 'rjsBaseCaptureEvent', 'rjsGmStatusEvent', 'rjsGameStatusEvent', 'rjsSquadListEvent'];
+RJSLoggingParser.eventNames = ['rjsChatMessageEvent', 'rjsPlayerJoinedEvent', 'rjsPlayerKilledEvent', 'rjsEditorActionEvent', 'rjsAIKilledEvent', 'rjsDamageEvent', 'rjsBaseCaptureEvent', 'rjsGmStatusEvent', 'rjsGameStatusEvent', 'rjsSquadListEvent'];
 
 module.exports = RJSLoggingParser;

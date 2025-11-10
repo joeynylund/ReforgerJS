@@ -4,7 +4,7 @@ const { EventEmitter } = require('events');
 class PlayerKilledEventHandler extends EventEmitter {
     constructor() {
         super();
-       this.regex = /\[([^\]]+)\] PLAYER_KILLED = grenadeType = ([^,]+), victimName = ([^,]+), attachments = ([^,]*), sightName = ([^,]+), isTeamKill = (true|false), killerId = (\d+), killerBiId = ([^,]+), victimFaction = ([^,]+), killerFaction = ([^,]+), victimId = (\d+), weaponSource = ([^,]+), killerName = ([^,]+), isFriendlyFire = (true|false), weaponName = ([^,]+), weaponType = ([^,]+), victimBiId = ([^,]+), killDistance = ([0-9.]+)/;
+        this.regex = /\[([^\]]+)\] PLAYER_KILLED = (.+)/;
     }
 
     test(line) {
@@ -15,45 +15,50 @@ class PlayerKilledEventHandler extends EventEmitter {
         const match = this.regex.exec(line);
         if (match) {
             const timestamp = match[1];
-            const grenadeType = match[2];
-            const victimName = match[3];
-            const attachments = match[4].trim();
-            const sightName = match[5];
-            const isTeamKill = match[6] === 'true';
-            const killerId = parseInt(match[7], 10);
-            const killerBiId = match[8];
-            const victimFaction = match[9];
-            const killerFaction = match[10];
-            const victimId = parseInt(match[11], 10);
-            const weaponSource = match[12];
-            const killerName = match[13];
-            const isFriendlyFire = match[14] === 'true';
-            const weaponName = match[15];
-            const weaponType = match[16];
-            const victimBiId = match[17];
-            const killDistance = parseFloat(match[18]);
-            
-            this.emit('playerKilledEvent', { 
+            const data = this.parseKeyValuePairs(match[2]);
+
+            const isTeamKill = data.isTeamKill === 'true';
+            const isFriendlyFire = data.isFriendlyFire === 'true';
+            const killerId = data.killerId ? parseInt(data.killerId, 10) : null;
+            const victimId = data.victimId ? parseInt(data.victimId, 10) : null;
+            const killDistance = data.killDistance ? parseFloat(data.killDistance) : null;
+
+            this.emit('playerKilledEvent', {
                 timestamp,
-                grenadeType,
-                victimName,
-                attachments,
-                sightName,
+                grenadeType: data.grenadeType,
+                victimName: data.victimName,
+                attachments: data.attachments ? data.attachments.trim() : '',
+                sightName: data.sightName,
                 isTeamKill,
                 killerId,
-                killerBiId,
-                victimFaction,
-                killerFaction,
+                killerBiId: data.killerBiId,
+                victimFaction: data.victimFaction,
+                killerFaction: data.killerFaction,
                 victimId,
-                weaponSource,
-                killerName,
+                weaponSource: data.weaponSource,
+                killerName: data.killerName,
                 isFriendlyFire,
-                weaponName,
-                weaponType,
-                victimBiId,
+                weaponName: data.weaponName,
+                weaponType: data.weaponType,
+                victimBiId: data.victimBiId,
                 killDistance
             });
         }
+    }
+
+    parseKeyValuePairs(dataString) {
+        const result = {};
+        // Match key = value pairs, where value can contain commas or be empty
+        const regex = /(\w+)\s*=\s*([^,]*?)(?=\s*,\s*\w+\s*=|$)/g;
+        let match;
+
+        while ((match = regex.exec(dataString)) !== null) {
+            const key = match[1];
+            const value = match[2].trim();
+            result[key] = value;
+        }
+
+        return result;
     }
 }
 

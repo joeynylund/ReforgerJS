@@ -4,7 +4,7 @@ const { EventEmitter } = require('events');
 class PlayerJoinedEventHandler extends EventEmitter {
     constructor() {
         super();
-        this.regex = /\[([^\]]+)\] PLAYER_JOINED = playerBiId = ([^,]+), platform = ([^,]+), playerName = ([^,]+), playerId = (\d+), profileName = (.+)/;
+        this.regex = /\[([^\]]+)\] PLAYER_JOINED = (.+)/;
     }
 
     test(line) {
@@ -15,31 +15,44 @@ class PlayerJoinedEventHandler extends EventEmitter {
         const match = this.regex.exec(line);
         if (match) {
             const timestamp = match[1];
-            const playerBiId = match[2];
-            const platform = match[3];
-            const playerName = match[4];
-            const playerId = parseInt(match[5], 10);
-            const profileName = match[6];
-            const platformType = this.getPlatformType(platform);
-            
-            this.emit('playerJoinedEvent', { 
+            const data = this.parseKeyValuePairs(match[2]);
+
+            const playerId = data.playerId ? parseInt(data.playerId, 10) : null;
+            const platformType = this.getPlatformType(data.platform);
+
+            this.emit('playerJoinedEvent', {
                 timestamp,
                 playerId,
-                playerName,
-                playerBiId,
-                profileName,
-                platform,
+                playerName: data.playerName,
+                playerBiId: data.playerBiId,
+                profileName: data.profileName,
+                platform: data.platform,
                 platformType,
                 raw: {
                     timestamp,
-                    playerBiId,
-                    platform,
-                    playerName,
+                    playerBiId: data.playerBiId,
+                    platform: data.platform,
+                    playerName: data.playerName,
                     playerId,
-                    profileName
+                    profileName: data.profileName
                 }
             });
         }
+    }
+
+    parseKeyValuePairs(dataString) {
+        const result = {};
+        // Match key = value pairs, where value can contain commas
+        const regex = /(\w+)\s*=\s*([^,]+?)(?=\s*,\s*\w+\s*=|$)/g;
+        let match;
+
+        while ((match = regex.exec(dataString)) !== null) {
+            const key = match[1];
+            const value = match[2].trim();
+            result[key] = value;
+        }
+
+        return result;
     }
 
     getPlatformType(platform) {
@@ -50,7 +63,7 @@ class PlayerJoinedEventHandler extends EventEmitter {
             'platform-linux': 'PC (Linux)',
             'platform-mac': 'PC (Mac)'
         };
-        
+
         return platformMappings[platform] || platform;
     }
 }

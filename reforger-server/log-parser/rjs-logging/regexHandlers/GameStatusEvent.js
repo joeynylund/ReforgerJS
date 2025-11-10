@@ -3,8 +3,8 @@ const { EventEmitter } = require('events');
 class GameStatusEventHandler extends EventEmitter {
     constructor() {
         super();
-        this.startRegex = /\[([^\]]+)\] GAME_START = scenarioId = ([^,]+), buildVersion = (.+)/;
-        this.endRegex = /\[([^\]]+)\] GAME_END = endReason = ([^,]+), winnerFactionName = ([^,]+), winnerFactionKey = ([^,]+), buildVersion = (.+)/;
+        this.startRegex = /\[([^\]]+)\] GAME_START = (.+)/;
+        this.endRegex = /\[([^\]]+)\] GAME_END = (.+)/;
     }
 
     test(line) {
@@ -16,19 +16,18 @@ class GameStatusEventHandler extends EventEmitter {
             const match = this.startRegex.exec(line);
             if (match) {
                 const timestamp = match[1];
-                const scenarioId = match[2];
-                const buildVersion = match[3];
-                
-                this.emit('gameStatusEvent', { 
+                const data = this.parseKeyValuePairs(match[2]);
+
+                this.emit('gameStatusEvent', {
                     timestamp,
                     status: 'start',
-                    scenarioId,
-                    buildVersion,
+                    scenarioId: data.scenarioId,
+                    buildVersion: data.buildVersion,
                     raw: {
                         timestamp,
                         status: 'start',
-                        scenarioId,
-                        buildVersion
+                        scenarioId: data.scenarioId,
+                        buildVersion: data.buildVersion
                     }
                 });
             }
@@ -36,29 +35,41 @@ class GameStatusEventHandler extends EventEmitter {
             const match = this.endRegex.exec(line);
             if (match) {
                 const timestamp = match[1];
-                const endReason = match[2];
-                const winnerFactionName = match[3];
-                const winnerFactionKey = match[4];
-                const buildVersion = match[5];
-                
-                this.emit('gameStatusEvent', { 
+                const data = this.parseKeyValuePairs(match[2]);
+
+                this.emit('gameStatusEvent', {
                     timestamp,
                     status: 'end',
-                    endReason,
-                    winnerFactionName,
-                    winnerFactionKey,
-                    buildVersion,
+                    endReason: data.endReason,
+                    winnerFactionName: data.winnerFactionName,
+                    winnerFactionKey: data.winnerFactionKey,
+                    buildVersion: data.buildVersion,
                     raw: {
                         timestamp,
                         status: 'end',
-                        endReason,
-                        winnerFactionName,
-                        winnerFactionKey,
-                        buildVersion
+                        endReason: data.endReason,
+                        winnerFactionName: data.winnerFactionName,
+                        winnerFactionKey: data.winnerFactionKey,
+                        buildVersion: data.buildVersion
                     }
                 });
             }
         }
+    }
+
+    parseKeyValuePairs(dataString) {
+        const result = {};
+        // Match key = value pairs, where value can contain commas
+        const regex = /(\w+)\s*=\s*([^,]+?)(?=\s*,\s*\w+\s*=|$)/g;
+        let match;
+
+        while ((match = regex.exec(dataString)) !== null) {
+            const key = match[1];
+            const value = match[2].trim();
+            result[key] = value;
+        }
+
+        return result;
     }
 }
 

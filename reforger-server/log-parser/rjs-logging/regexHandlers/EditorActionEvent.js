@@ -4,7 +4,7 @@ const { EventEmitter } = require('events');
 class EditorActionEventHandler extends EventEmitter {
     constructor() {
         super();
-        this.regex = /\[([^\]]+)\] EDITOR_ACTION = selectedEntityComponentsNames = ([^,]+), hoveredEntityComponentOwnerId = ([^,]+), selectedEntityComponentsOwnersIds = ([^,]+), action = ([^,]+), hoveredEntityComponentName = ([^,]+), playerName = ([^,]+), playerId = (\d+), playerGUID = (.+)/;
+        this.regex = /\[([^\]]+)\] EDITOR_ACTION = (.+)/;
     }
 
     test(line) {
@@ -15,47 +15,61 @@ class EditorActionEventHandler extends EventEmitter {
         const match = this.regex.exec(line);
         if (match) {
             const timestamp = match[1];
-            const selectedEntityComponentsNames = match[2];
-            const hoveredEntityComponentOwnerId = parseInt(match[3], 10);
-            const selectedEntityComponentsOwnersIds = match[4];
-            const action = match[5];
-            const hoveredEntityComponentName = match[6];
-            const playerName = match[7];
-            const playerId = parseInt(match[8], 10);
-            const playerGUID = match[9];
-            
-            const actionType = this.getActionType(action);
-            const selectedEntities = this.parseSelectedEntities(selectedEntityComponentsNames, selectedEntityComponentsOwnersIds);
-            
-            this.emit('editorActionEvent', { 
+            const data = this.parseKeyValuePairs(match[2]);
+
+            const playerId = data.playerId ? parseInt(data.playerId, 10) : null;
+            const hoveredEntityComponentOwnerId = data.hoveredEntityComponentOwnerId ? parseInt(data.hoveredEntityComponentOwnerId, 10) : -1;
+
+            const actionType = this.getActionType(data.action);
+            const selectedEntities = this.parseSelectedEntities(
+                data.selectedEntityComponentsNames,
+                data.selectedEntityComponentsOwnersIds
+            );
+
+            this.emit('editorActionEvent', {
                 timestamp,
                 player: {
                     id: playerId,
-                    name: playerName,
-                    guid: playerGUID
+                    name: data.playerName,
+                    guid: data.playerGUID
                 },
                 action: {
-                    type: action,
+                    type: data.action,
                     category: actionType
                 },
                 hoveredEntity: {
-                    name: hoveredEntityComponentName === 'unknown' ? null : hoveredEntityComponentName,
+                    name: data.hoveredEntityComponentName === 'unknown' ? null : data.hoveredEntityComponentName,
                     ownerId: hoveredEntityComponentOwnerId === -1 ? null : hoveredEntityComponentOwnerId
                 },
                 selectedEntities: selectedEntities,
                 raw: {
                     timestamp,
-                    selectedEntityComponentsNames,
+                    selectedEntityComponentsNames: data.selectedEntityComponentsNames,
                     hoveredEntityComponentOwnerId,
-                    selectedEntityComponentsOwnersIds,
-                    action,
-                    hoveredEntityComponentName,
-                    playerName,
+                    selectedEntityComponentsOwnersIds: data.selectedEntityComponentsOwnersIds,
+                    action: data.action,
+                    hoveredEntityComponentName: data.hoveredEntityComponentName,
+                    playerName: data.playerName,
                     playerId,
-                    playerGUID
+                    playerGUID: data.playerGUID
                 }
             });
         }
+    }
+
+    parseKeyValuePairs(dataString) {
+        const result = {};
+        // Match key = value pairs, where value can contain commas
+        const regex = /(\w+)\s*=\s*([^,]+?)(?=\s*,\s*\w+\s*=|$)/g;
+        let match;
+
+        while ((match = regex.exec(dataString)) !== null) {
+            const key = match[1];
+            const value = match[2].trim();
+            result[key] = value;
+        }
+
+        return result;
     }
 
     parseSelectedEntities(namesString, ownersString) {

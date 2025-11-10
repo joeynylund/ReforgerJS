@@ -45,24 +45,19 @@ class TailCustomScanReader {
         return;
       }
       
-      const stats = fs.statSync(this.filePath);
-      const currentModifiedTime = stats.mtime.getTime();
-      
-      if (this.lastModifiedTime === currentModifiedTime && this.lastFileContent !== null) {
-        return;
-      }
-      
+      // Always read the file content on each scan interval
+      // This ensures we catch all changes even if file size/modification time doesn't change
       const fileContent = fs.readFileSync(this.filePath, 'utf-8');
-      
-      if (fileContent === this.lastFileContent) {
-        return;
-      }
       
       try {
         const jsonData = JSON.parse(fileContent);
+        // Always emit the data, regardless of whether content changed
+        // This is important for plugins that track time-based metrics
         this.queueData(jsonData);
         this.lastFileContent = fileContent;
-        this.lastModifiedTime = currentModifiedTime;
+        
+        const stats = fs.statSync(this.filePath);
+        this.lastModifiedTime = stats.mtime.getTime();
       } catch (parseError) {
         logger.error(`Error parsing JSON file ${this.filePath}: ${parseError.message}`);
       }
