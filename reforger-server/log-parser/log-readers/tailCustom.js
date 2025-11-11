@@ -26,6 +26,7 @@ class TailCustomReader {
     this.filePath = path.join(this.logDir, this.filename);
     
     this.lastFileSize = 0;
+    this.buffer = ''; // Buffer for incomplete lines
     this.scanIntervalID = null;
     this.stateSaveID = null;
   }
@@ -37,11 +38,13 @@ class TailCustomReader {
         if (data && data.trim()) {
           const state = JSON.parse(data);
           this.lastFileSize = state.lastFileSize || 0;
+          this.buffer = state.buffer || '';
         }
       }
     } catch (error) {
       logger.warn(`Error loading state for custom parser: ${error.message}`);
       this.lastFileSize = 0;
+      this.buffer = '';
     }
   }
 
@@ -49,7 +52,8 @@ class TailCustomReader {
     try {
       const state = {
         filePath: this.filePath,
-        lastFileSize: this.lastFileSize
+        lastFileSize: this.lastFileSize,
+        buffer: this.buffer || ''
       };
       fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2), 'utf-8');
     } catch (error) {
@@ -82,34 +86,63 @@ class TailCustomReader {
       if (newSize < this.lastFileSize) {
         logger.info(`File ${this.filePath} appears to have been truncated or rotated. Resetting position.`);
         this.lastFileSize = 0;
+        this.buffer = '';
       }
       
       if (newSize > this.lastFileSize) {
-        const stream = fs.createReadStream(this.filePath, {
-          start: this.lastFileSize,
-          end: newSize - 1,
-        });
+        // Read only the new portion of the file
+        const fd = fs.openSync(this.filePath, 'r');
+        const chunkSize = 64 * 1024; // 64KB chunks
+        let currentPos = this.lastFileSize;
+        let buffer = this.buffer || '';
         
-        let data = '';
-        stream.on('data', chunk => {
-          data += chunk.toString();
-        });
-        
-        stream.on('end', () => {
-          const lines = data.split(/\r?\n/);
-          lines.forEach(line => {
-            if (line.trim().length > 0) {
-              this.queueLine(line);
+        try {
+          while (currentPos < newSize) {
+            const readSize = Math.min(chunkSize, newSize - currentPos);
+            const chunk = Buffer.alloc(readSize);
+            const bytesRead = fs.readSync(fd, chunk, 0, readSize, currentPos);
+            
+            if (bytesRead === 0) break;
+            
+            const chunkStr = chunk.toString('utf8', 0, bytesRead);
+            const allData = buffer + chunkStr;
+            const lines = allData.split(/\r?\n/);
+            
+            // Keep the last incomplete line in buffer
+            buffer = lines.pop() || '';
+            
+            // Process complete lines immediately
+            for (const line of lines) {
+              if (line.trim().length > 0) {
+                this.queueLine(line.trim());
+              }
             }
-          });
+            
+            currentPos += bytesRead;
+            
+            // Prevent blocking by processing in smaller increments
+            if (currentPos < newSize && (currentPos - this.lastFileSize) > chunkSize * 10) {
+              // Save progress and continue on next scan
+              this.buffer = buffer;
+              this.lastFileSize = currentPos;
+              fs.closeSync(fd);
+              return;
+            }
+          }
+          
+          // Process any remaining buffer
+          if (buffer && buffer.trim().length > 0) {
+            this.queueLine(buffer.trim());
+            buffer = '';
+          }
+          
+          this.buffer = buffer;
           this.lastFileSize = newSize;
-          stream.destroy();
-        });
-        
-        stream.on('error', err => {
-          logger.error(`Error reading log file: ${err.message}`);
-          stream.destroy();
-        });
+          fs.closeSync(fd);
+        } catch (readErr) {
+          fs.closeSync(fd);
+          throw readErr;
+        }
       }
     } catch (err) {
       logger.error(`Error scanning logs: ${err.message}`);
