@@ -3,6 +3,14 @@
 <img src="reforger-server/utils/ReforgerJSlogo.png" alt="Logo" width="800"/>
 
 </div>
+# For this fork, just add this to the config.json:
+```"customParsers": {
+    "wcs-commands": {
+      "enabled": true,
+      "logDir": "/path/to/folder",
+      "fileName": "events.json"
+    }
+  }```
 
 # ReforgerJS
 

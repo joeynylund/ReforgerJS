@@ -119,7 +119,6 @@ class WCSCommandsParser extends EventEmitter {
     }
   }
 
-  // Existing event handlers (maintaining backward compatibility)
   handleChatMessageEvent(data) {
     const channelType = this.getChannelType(data.channelId);
     
